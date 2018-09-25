@@ -1,13 +1,29 @@
 package com.github.scala.io.talk
 
+import com.github.scala.io.api.DataWithSchema
+import scalaz._
+import Scalaz._
+import matryoshka._
 import matryoshka.data.Fix
+import matryoshka.implicits._
 
 // TODO Matryoshka Engine
 object ApplyPrivacy {
 
   def transform(schema: Fix[SchemaF],
                 data: Fix[DataF],
-                privacyStrategies: Set[PrivacyStrategy]): Fix[DataF] = ???
+                privacyStrategies: Set[PrivacyStrategy]): Fix[DataF] = {
+    val privacyAlg: AlgebraM[\/[Incompatibility, ?], DataWithSchema, Fix[DataF]] = ???
+
+    (schema, data).hyloM[\/[Incompatibility, ?], DataWithSchema, Fix[DataF]](privacyAlg, DataF.zipWithSchema) match {
+      case -\/(incompatibilities) =>
+        throw new IllegalStateException(
+          s"Found incompatibilities between the observed data and its expected schema : $incompatibilities")
+
+      case \/-(result) =>
+        result
+    }
+  }
 
   def transformSchema(schema: Fix[SchemaF]): Fix[SchemaF] = ???
 }
