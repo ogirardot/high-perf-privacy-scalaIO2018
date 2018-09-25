@@ -5,7 +5,9 @@ import matryoshka.data.Fix
 // TODO Matryoshka Engine
 object ApplyPrivacy {
 
-  def transform(schema: Fix[SchemaF], data: Fix[DataF], privacyStrategies: String): Fix[DataF] = ???
+  def transform(schema: Fix[SchemaF],
+                data: Fix[DataF],
+                privacyStrategies: Set[PrivacyStrategy]): Fix[DataF] = ???
 
   def transformSchema(schema: Fix[SchemaF]): Fix[SchemaF] = ???
 }

@@ -1,14 +1,19 @@
 package com.github.scala.io.talk
 
+import com.github.scala.io.talk.ColumnMetadata.SemanticTag
 import matryoshka.{Algebra, Birecursive, Coalgebra}
 import scalaz.Functor
 
 import scala.collection.immutable.ListMap
 
 
-case class ColumnMetadata()
+case class ColumnMetadata(nullable: Boolean, tags: List[SemanticTag])
+
 object ColumnMetadata {
-  def empty = ColumnMetadata()
+  type SemanticTag = (String, String)
+
+  def empty = ColumnMetadata(true, Nil)
+
 }
 /**
   * Without further ado, let's define our main pattern-functor for the remaining of the session.
