@@ -6,6 +6,10 @@ import Scalaz._
 import matryoshka._
 import matryoshka.data.Fix
 import matryoshka.implicits._
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
+import org.apache.spark.sql.types.DataType
 
 // TODO Matryoshka Engine
 object ApplyPrivacy {
@@ -28,6 +32,51 @@ object ApplyPrivacy {
   def transformSchema(schema: Fix[SchemaF]): Fix[SchemaF] = ???
 }
 
+
+case class InputVariable(name: String) extends AnyVal
+
+sealed trait CatalystOp
+case class CatalystCode(code: InputVariable => String, outputVariable: String)
+
+case class ApplyPrivacyExpression(schema: Fix[SchemaF],
+                                  privacyStrategies: Set[PrivacyStrategy],
+                                   children: Seq[Expression]) extends Expression {
+
+  override def nullable: Boolean = children.forall(_.nullable)
+
+  override def eval(input: InternalRow): Any = ??? // privacy "manually" #DelegateToMatryoshka
+
+  override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = ??? // codegeneration
+
+  /**
+    * The mutate schema :
+    * @return
+    */
+  override def dataType: DataType = {
+    import SchemaF._
+    import matryoshka.implicits._
+    import matryoshka.data._
+    def ifPrivacy[A](input: SchemaF[A], metadata: ColumnMetadata) = {
+      privacyStrategies.head.schema(input)
+    }
+
+    val alg:  Algebra[SchemaF, DataType] = {
+      case struct @ StructF(fields, metadata) =>
+        val privaciedSchema = ifPrivacy(struct, metadata)
+        schemaFToDataType.apply(privaciedSchema)
+
+      case v@ ArrayF(element, metadata) =>
+        val privaciedSchema = ifPrivacy(v, metadata)
+        schemaFToDataType.apply(v)
+
+      case v: ValueF[DataType] =>
+        val privaciedSchema = ifPrivacy(v, v.metadata)
+        schemaFToDataType.apply(privaciedSchema)
+    }
+    Fix.birecursiveT.cataT(schema)(alg)
+  }
+}
+
 sealed trait PrivacyEngine
 case object MatryoshkaEngine extends PrivacyEngine
 case object LambdaEngine extends PrivacyEngine
@@ -43,7 +92,7 @@ sealed trait PrivacyStrategy {
 
   def apply(data: Fix[DataF]): Either[List[PrivacyApplicationFailure], Option[Fix[DataF]]]
 
-  def schema(input: Fix[SchemaF]): Option[Fix[SchemaF]] = Some(input)
+  def schema[A](input: SchemaF[A]): SchemaF[A] = input
 }
 
 case class PrivacyApplicationFailure(reason: String)
