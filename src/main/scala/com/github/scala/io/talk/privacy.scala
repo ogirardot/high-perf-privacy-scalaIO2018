@@ -11,7 +11,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.types.DataType
 
-// TODO Matryoshka Engine
+// TODO Matryoshka Engine & Lambda Engine
 object ApplyPrivacy {
 
   def transform(schema: Fix[SchemaF],
@@ -29,6 +29,7 @@ object ApplyPrivacy {
     }
   }
 
+  // TODO same as com.github.scala.io.talk.ApplyPrivacyExpression.dataType without spark
   def transformSchema(schema: Fix[SchemaF]): Fix[SchemaF] = ???
 }
 
@@ -38,18 +39,22 @@ case class InputVariable(name: String) extends AnyVal
 sealed trait CatalystOp
 case class CatalystCode(code: InputVariable => String, outputVariable: String)
 
+// TODO Spark expression
 case class ApplyPrivacyExpression(schema: Fix[SchemaF],
                                   privacyStrategies: Set[PrivacyStrategy],
                                    children: Seq[Expression]) extends Expression {
 
   override def nullable: Boolean = children.forall(_.nullable)
 
+  // TODO delegate to matryoshka or lambda
   override def eval(input: InternalRow): Any = ??? // privacy "manually" #DelegateToMatryoshka
 
+  // TODO codegen
   override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = ??? // codegeneration
 
   /**
     * The mutate schema :
+    * TODO mutate the schema through privacy .schema application
     * @return
     */
   override def dataType: DataType = {
