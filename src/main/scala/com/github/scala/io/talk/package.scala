@@ -8,4 +8,6 @@ package object api {
 
   type DataWithSchema[A] = EnvT[Fix[SchemaF], DataF, A]
 
+  type SchemaWithPath[A] = EnvT[Fix[SchemaF], DataF, A]
+
 }

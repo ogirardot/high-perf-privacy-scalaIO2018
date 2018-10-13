@@ -4,8 +4,6 @@ import com.github.scala.io.talk.ColumnMetadata.SemanticTag
 import matryoshka.{Algebra, Birecursive, Coalgebra}
 import scalaz.Functor
 
-import scala.collection.immutable.ListMap
-
 
 case class ColumnMetadata(nullable: Boolean, tags: List[SemanticTag])
 
@@ -21,7 +19,7 @@ object ColumnMetadata {
 sealed trait SchemaF[A]
 
 // we'll use a ListMap to keep the ordering of the fields
-final case class StructF[A](fields: ListMap[String, A], metadata: ColumnMetadata) extends SchemaF[A]
+final case class StructF[A](fields: List[(String, A)], metadata: ColumnMetadata) extends SchemaF[A]
 final case class ArrayF[A](element: A, metadata: ColumnMetadata)                  extends SchemaF[A]
 
 sealed trait ValueF[A] extends SchemaF[A] {
@@ -42,9 +40,8 @@ object SchemaF extends SchemaFToDataTypeAlgebras {
     */
   implicit val schemaFScalazFunctor: Functor[SchemaF] = new Functor[SchemaF] {
     def map[A, B](fa: SchemaF[A])(f: A => B): SchemaF[B] = fa match {
-      case StructF(fields, m) => StructF(ListMap(
+      case StructF(fields, m) => StructF(List(
         fields
-          .toList
           .map{ case (name, value) => name -> f(value) }:_*
       ), m)
       case ArrayF(elem, m)    => ArrayF(f(elem), m)
@@ -96,7 +93,7 @@ trait SchemaFToDataTypeAlgebras {
     * And the other way around, a function from DataType to SchemaF[DataType]
     */
   def dataTypeToSchemaF: Coalgebra[SchemaF, DataType] = {
-    case StructType(fields) => StructF(ListMap(fields.map(f => f.name -> f.dataType): _*), ColumnMetadata.empty)
+    case StructType(fields) => StructF(List(fields.map(f => f.name -> f.dataType): _*), ColumnMetadata.empty)
     case ArrayType(elem, _) => ArrayF(elem, ColumnMetadata.empty)
     case BooleanType        => BooleanF(ColumnMetadata.empty)
     case DateType           => DateF(ColumnMetadata.empty)

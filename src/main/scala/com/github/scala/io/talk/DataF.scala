@@ -26,7 +26,7 @@ final case class GNullF[A]() extends GValueF[A] {
 
 final case class GArrayF[A](elems: Seq[A]) extends DataF[A]
 
-final case class GStructF[A](fields: ListMap[String, A]) extends DataF[A]
+final case class GStructF[A](fields: List[(String, A)]) extends DataF[A]
 
 final case class GStringF[A](value: String) extends GValueF[A]
 
@@ -45,37 +45,6 @@ final case class GTimestampF[A](value: java.sql.Timestamp) extends GValueF[A]
 final case class GBooleanF[A](value: Boolean) extends GValueF[A]
 
 trait DataFInstances {
- /* val genericDataCoalgebra: Coalgebra[DataF, GenericData] = {
-    case GNull | null      => GNullF()
-    case GArray(elems)     => GArrayF(elems)
-    case GStruct(fields)   => GStructF(fields)
-    case GString(value)    => GStringF(value)
-    case GLong(value)      => GLongF(value)
-    case GInt(value)       => GIntF(value)
-    case GDouble(value)    => GDoubleF(value)
-    case GFloat(value)     => GFloatF(value)
-    case GDate(value)      => GDateF(value)
-    case GTimestamp(value) => GTimestampF(value)
-    case GBoolean(value)   => GBooleanF(value)
-  }
-
-  val genericDataAlgebra: Algebra[DataF, GenericData] = {
-    case GNullF()           => GNull
-    case GArrayF(elems)     => GArray(elems)
-    case GStructF(fields)   => GStruct(fields)
-    case GStringF(value)    => GString(value)
-    case GLongF(value)      => GLong(value)
-    case GIntF(value)       => GInt(value)
-    case GDoubleF(value)    => GDouble(value)
-    case GFloatF(value)     => GFloat(value)
-    case GDateF(value)      => GDate(value)
-    case GTimestampF(value) => GTimestamp(value)
-    case GBooleanF(value)   => GBoolean(value)
-  }
-
-  implicit val genericDataBirecursive: Birecursive.Aux[GenericData, DataF] =
-    Birecursive.algebraIso(genericDataAlgebra, genericDataCoalgebra)*/
-
   implicit val genericDataFTraverse: Traverse[DataF] = new Traverse[DataF] {
 
     override def traverseImpl[G[_], A, B](
@@ -87,7 +56,7 @@ trait DataFInstances {
 
       case GStructF(fields) =>
         val (keys, values) = fields.unzip
-        Functor[G].map(values.toList traverse f)(v => GStructF(ListMap((keys zip v).toSeq: _*)))
+        Functor[G].map(values.toList traverse f)(v => GStructF(List((keys zip v).toSeq: _*)))
 
       case GStringF(value)    => Applicative[G].point(GStringF[B](value))
       case GLongF(value)      => Applicative[G].point(GLongF[B](value))
@@ -114,7 +83,7 @@ trait DataFunctions {
 
     case (structf @ Fix(StructF(fields, metadata)), Fix(GStructF(values))) =>
       val fieldMap = fields
-      val zipped = values.map { case (name, value) => (name, (fieldMap(name), value)) }
+      val zipped = values.map { case (name, value) => (name, (fieldMap.toMap.apply(name), value)) }
       EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, DataF.struct(zipped))).right[Incompatibility]
 
     case (structf @ Fix(StructF(_, _)), Fix(GNullF())) =>
@@ -144,7 +113,7 @@ trait DataFunctions {
 
 object DataF extends DataFInstances with DataFunctions {
 
-  def struct[A](fields: ListMap[String, A]): DataF[A] = GStructF(fields)
+  def struct[A](fields: List[(String, A)]): DataF[A] = GStructF(fields)
 
   def array[A](elements: List[A]): DataF[A] = GArrayF(elements)
 
