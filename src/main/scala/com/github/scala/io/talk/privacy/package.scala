@@ -21,7 +21,7 @@ package object privacy {
 
     val allowedInputTypes: Set[String]
 
-    def apply(data: Fix[DataF]): Either[List[PrivacyApplicationFailure], Option[Fix[DataF]]]
+    def apply(data: Fix[DataF]): Either[List[PrivacyApplicationFailure], Fix[DataF]]
 
     def schema[A](input: SchemaF[A]): SchemaF[A] = input
   }
