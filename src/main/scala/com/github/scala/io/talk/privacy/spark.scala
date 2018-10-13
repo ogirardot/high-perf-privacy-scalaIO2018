@@ -18,8 +18,8 @@ case class CatalystCode(code: InputVariable => String, outputVariable: String) e
 
 case object NoOp extends CatalystOp
 
-case class ApplyMe(lambda: Any => Any) {
 
+case class ApplyMe(lambda: Any => Any) {
   def apply(value: Any): Any = lambda(value)
 }
 
@@ -158,6 +158,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
         (elementDataType, NoOp, value.metadata.nullable, value.metadata)
     }
 
+
     ev.copy(code = Fix.birecursiveT.cataT(schema)(privacyAlg) match {
       case (_, NoOp, _, _) =>
         s"""
@@ -177,8 +178,8 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
   /**
     * Generate Catalyst Code for a struct
     *
-    * @param fieldsWithDataType  all the fields of the inner struct
-    * @param tmp                 the variable we want to mutate
+    * @param fieldsWithDataType all the fields of the inner struct
+    * @param tmp                the variable we want to mutate
     * @return the code necessary to mutate a struct
     */
   def generateCodeForStruct(
@@ -230,7 +231,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
             errors.foreach(println)
             null
           },
-          x => unwrap(x.map(_.unFix))
+          x => unwrap(x.unFix)
         )
     })
   }
@@ -255,17 +256,12 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     }
   }
 
-  def unwrap[A](input: Option[DataF[A]]): Any = input match {
-    case None => null
-    case Some(x) =>
-      x match {
-        case GNullF() => null
-        case x: GStringF[A] => UTF8String.fromString(x.value)
-        case x: GValueF[A] => x.value
-        case _ =>
-          throw new UnsupportedOperationException(s"Input data is not supported : $input of type ${input.getClass}")
-      }
-
+  def unwrap[A](input: DataF[A]): Any = input match {
+    case GNullF() => null
+    case x: GStringF[A] => UTF8String.fromString(x.value)
+    case x: GValueF[A] => x.value
+    case _ =>
+      throw new UnsupportedOperationException(s"Input data is not supported : $input of type ${input.getClass}")
   }
 
   /**
