@@ -1,7 +1,7 @@
 package com.github.scala.io.talk.privacy
 
 import com.github.scala.io.talk._
-import com.github.scala.io.talk.privacy.PrivacyStrategy.{PrivacyMethod, PrivacyStrategies}
+import com.github.scala.io.talk.privacy.PrivacyStrategy.PrivacyStrategies
 import matryoshka.Algebra
 import matryoshka.data.Fix
 import org.slf4j.LoggerFactory
@@ -39,10 +39,10 @@ object ApplyPrivacyLambda {
 
       case ArrayF(elementType, metadata) =>
         privacyStrategies.foldLeft(NoLensOp: LensOp) {
-          case (op, (keys, (methodName, cypher))) =>
+          case (op, (keys, cypher)) =>
             if (keys.map(metadata.tags.contains).reduce(_ && _)) {
               val lambda: Fix[DataF] => Fix[DataF] =
-                cypherWithContext(methodName, cypher)
+                cypherWithContext(cypher)
               op.andThen(lambda)
             } else {
               op
@@ -65,10 +65,10 @@ object ApplyPrivacyLambda {
 
       case value: ValueF[LensOp] if value.metadata.tags.nonEmpty =>
         privacyStrategies.foldLeft(NoLensOp: LensOp) {
-          case (op, (keys, (methodName, cypher))) =>
+          case (op, (keys, cypher)) =>
             if (keys.map(value.metadata.tags.contains).reduce(_ && _)) {
               val lambda: Fix[DataF] => Fix[DataF] =
-                cypherWithContext(methodName, cypher)
+                cypherWithContext(cypher)
               op.andThen(lambda)
             } else {
               op
@@ -80,9 +80,7 @@ object ApplyPrivacyLambda {
     Fix.birecursiveT.cataT(schema)(alg)
   }
 
-  private def cypherWithContext(methodName: PrivacyMethod,
-                                cypher: PrivacyStrategy
-                               )(value: Fix[DataF]): Fix[DataF] = {
+  private def cypherWithContext(cypher: PrivacyStrategy)(value: Fix[DataF]): Fix[DataF] = {
     cypher(value).fold(
       errors => {
         if (value != Fix[DataF](GNullF())) {

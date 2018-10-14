@@ -16,7 +16,9 @@ object ColumnMetadata {
 /**
   * Without further ado, let's define our main pattern-functor for the remaining of the session.
   */
-sealed trait SchemaF[A]
+sealed trait SchemaF[A] {
+  val metadata: ColumnMetadata
+}
 
 // we'll use a ListMap to keep the ordering of the fields
 final case class StructF[A](fields: List[(String, A)], metadata: ColumnMetadata) extends SchemaF[A]
@@ -44,7 +46,7 @@ object SchemaF extends SchemaFToDataTypeAlgebras {
         fields
           .map{ case (name, value) => name -> f(value) }:_*
       ), m)
-      case ArrayF(elem, m)    => ArrayF(f(elem), m)
+      case ArrayF(elem, m)  => ArrayF(f(elem), m)
       case BooleanF(m)      => BooleanF(m)
       case DateF(m)         => DateF(m)
       case DoubleF(m)       => DoubleF(m)

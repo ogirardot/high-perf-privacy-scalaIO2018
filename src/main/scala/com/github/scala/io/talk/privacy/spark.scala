@@ -50,7 +50,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
       privacyStrategies.find { case (tags, _) =>
         // we do not check here if the strat is "applicable" only if the tags match
         tags.size == metadata.tags.size && tags.toSet == metadata.tags.toSet
-      }.map { case (_, (_, strategy)) =>
+      }.map { case (_, strategy) =>
         strategy.schema(input)
       }.getOrElse(input)
     }
@@ -134,14 +134,14 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
         val tags: List[(String, String)] = valueColumnSchema.metadata.tags
         val elementDataType: DataType = schemaFToDataType.apply(schemaFScalazFunctor(valueColumnSchema)(_._1))
         val resOp = privacyStrategies.foldLeft(NoOp: CatalystOp) {
-          case (item, (keys, (methodName, cypher))) =>
+          case (item, (keys, cypher)) =>
             if (keys.map(tags.contains).reduce(_ && _)) {
               val output = ctx.freshName("output")
               val outputSchema = cypher.schema(valueColumnSchema)
               val outputDataType = schemaFToDataType.apply(schemaFScalazFunctor(outputSchema)(_._1))
               val javaType = ctx.boxedType(outputDataType)
               val cypherInSpark =
-                ctx.addReferenceObj("cypherMe", transTypePrivacyStrategy(methodName)(cypher))
+                ctx.addReferenceObj("cypherMe", transTypePrivacyStrategy(cypher))
               val code = (inputVariable: InputVariable) =>
                 s"""
                       $javaType $output = ($javaType) $cypherInSpark.apply(${inputVariable.name});
@@ -219,9 +219,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     }
   }
 
-  def transTypePrivacyStrategy(methodName: String)(
-    strat: PrivacyStrategy
-  ): ApplyMe = {
+  def transTypePrivacyStrategy(strat: PrivacyStrategy): ApplyMe = {
     ApplyMe((value: Any) => {
       strat
         .apply(wrap(value))
@@ -230,7 +228,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
             errors.foreach(println)
             null
           },
-          x => unwrap(x.map(_.unFix))
+          x => unwrap(x.unFix)
         )
     })
   }
@@ -255,18 +253,13 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     }
   }
 
-  def unwrap[A](input: Option[DataF[A]]): Any = input match {
-    case None => null
-    case Some(x) =>
-      x match {
+  def unwrap[A](input: DataF[A]): Any = input match {
         case GNullF() => null
         case x: GStringF[A] => UTF8String.fromString(x.value)
         case x: GValueF[A] => x.value
         case _ =>
           throw new UnsupportedOperationException(s"Input data is not supported : $input of type ${input.getClass}")
       }
-
-  }
 
   /**
     * Re-construct the Spark StructType data type, from the fields after privacy
