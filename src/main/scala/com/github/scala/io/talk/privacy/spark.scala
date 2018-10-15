@@ -4,10 +4,12 @@ import com.github.scala.io.talk._
 import com.github.scala.io.talk.privacy.PrivacyStrategy.PrivacyStrategies
 import matryoshka.Algebra
 import matryoshka.data.Fix
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.types.{ArrayType, DataType, StructField, StructType}
+import org.apache.spark.sql.utils.SmartRow
 import org.apache.spark.unsafe.types.UTF8String
 
 case class InputVariable(name: String) extends AnyVal
@@ -33,8 +35,17 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
 
   override def nullable: Boolean = children.forall(_.nullable)
 
-  // TODO delegate to matryoshka or lambda
-  override def eval(input: InternalRow): Any = ??? // privacy "manually" #DelegateToMatryoshka
+  override def eval(input: InternalRow): Any = {
+    // privacy "manually" #DelegateToMatryoshka
+    val structType = Fix.birecursiveT.cataT(schema)(SchemaF.schemaFToDataType).asInstanceOf[StructType]
+    val gdata = SparkDataConverter.toGenericData(Row(input.toSeq(structType):_*), structType)
+    val res = matryoshkaEngine.transform(schema, gdata, privacyStrategies)
+    SmartRow.fromSeq(SparkDataConverter.fromGenericData(res).toSeq.map {
+      case s: String => UTF8String.fromString(s)
+      case a => a
+    }
+    )
+  }
 
   /**
     * The mutate schema :

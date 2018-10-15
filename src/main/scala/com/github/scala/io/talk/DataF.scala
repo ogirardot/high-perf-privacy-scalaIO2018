@@ -7,6 +7,7 @@ import matryoshka.implicits._
 import matryoshka.patterns.EnvT
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{ArrayType, DataType, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 import scalaz.Scalaz._
 import scalaz._
 
@@ -196,6 +197,8 @@ object SparkDataConverter {
           Fix(GLongF(value))
         case value: String =>
           Fix(GStringF(value))
+        case value: UTF8String =>
+          Fix(GStringF(value.toString))
         case null =>
           Fix(GNullF())
       }
