@@ -29,7 +29,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
                                   children: Seq[Expression]) extends Expression {
 
   type FieldName = String
-  type FieldWithInfos = (DataType, CatalystOp, Boolean, ColumnMetadata)
+  type FieldWithInfos = (DataType, CatalystOp)
 
   override def nullable: Boolean = children.forall(_.nullable)
 
@@ -93,10 +93,10 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
              ${fieldsCode.apply(InputVariable(tmp))}
             """
         }
-        (outputDataType, CatalystCode(code, tmp), metadata.nullable, metadata)
+        (outputDataType, CatalystCode(code, tmp))
 
       case ArrayF(elementType, metadata) =>
-        val (elementSparkDataType, innerOp, innerNullable, innerMetadata) = elementType
+        val (elementSparkDataType, innerOp) = elementType
         val arrayDataType = ArrayType(elementSparkDataType)
         val resOp = if (innerOp == NoOp) {
           innerOp
@@ -127,7 +127,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
             """
           CatalystCode(code, output)
         }
-        (arrayDataType, resOp, metadata.nullable, metadata)
+        (arrayDataType, resOp)
 
 
       case valueColumnSchema: ValueF[FieldWithInfos] if valueColumnSchema.metadata.tags.nonEmpty =>
@@ -150,23 +150,23 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
 
             } else item
         }
-        (elementDataType, resOp, valueColumnSchema.metadata.nullable, valueColumnSchema.metadata)
+        (elementDataType, resOp)
 
 
       case value: ValueF[FieldWithInfos] if value.metadata.tags.isEmpty =>
         val elementDataType = schemaFToDataType.apply(schemaFScalazFunctor(value)(_._1))
-        (elementDataType, NoOp, value.metadata.nullable, value.metadata)
+        (elementDataType, NoOp)
     }
 
 
     ev.copy(code = Fix.birecursiveT.cataT(schema)(privacyAlg) match {
-      case (_, NoOp, _, _) =>
+      case (_, NoOp) =>
         s"""
            final boolean ${ev.isNull} = ($input != null) ? false : true;
            final InternalRow  ${ev.value} = $input;
           """
 
-      case rec@(topLevelDataType, CatalystCode(method, outputVariable), _, _) =>
+      case rec@(topLevelDataType, CatalystCode(method, outputVariable)) =>
         s"""
               ${method(InputVariable(input))}
               final boolean ${ev.isNull} = ($input != null) ? false : true;
@@ -188,7 +188,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
                              tmp: String
                            ): CatalystCode = {
     fieldsWithDataType.zipWithIndex.foldLeft(CatalystCode(_ => "", tmp)) {
-      case (buffer, ((_, (elementDataType, op, _, _)), idx)) =>
+      case (buffer, ((_, (elementDataType, op)), idx)) =>
         if (op == NoOp) {
           buffer
         } else {
@@ -270,8 +270,8 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     */
   private def fieldsToSparkDataType(fieldsWithDataType: List[(FieldName, FieldWithInfos)]): StructType = {
     StructType(fieldsWithDataType.map {
-      case (fieldName, (fieldDataType, _, nullable, _)) =>
-        StructField(fieldName, fieldDataType, nullable)
+      case (fieldName, (fieldDataType, _)) =>
+        StructField(fieldName, fieldDataType, nullable = true)
     })
   }
 }
