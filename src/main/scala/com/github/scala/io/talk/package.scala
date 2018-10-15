@@ -39,8 +39,11 @@ package object api {
           val mutated = df.rdd.map { row =>
             val gdata = SparkDataConverter.toGenericData(row, structSchema)
             val result = preparedLambda.apply(gdata)
-            SparkDataConverter.fromGenericData(result)
+            val rr = SparkDataConverter.fromGenericData(result)
+            println(rr)
+            rr
           }
+          println(mutatedDataType)
           df.sparkSession.createDataFrame(mutated, mutatedDataType.asInstanceOf[StructType])
 
         case CodegenEngine =>

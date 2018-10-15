@@ -138,7 +138,7 @@ object SparkDataConverter {
       case GArrayF(elems) =>
         val values = elems.map {
           case (previous, current) =>
-            if (previous.isInstanceOf[Fix[GValueF]])
+            if (previous.project.isInstanceOf[GValueF[_]])
               current.get(0)
             else
               current
@@ -148,7 +148,7 @@ object SparkDataConverter {
       case GStructF(fields) =>
         val values = fields.map { field =>
           val (fx, value) = field._2
-          if (fx.isInstanceOf[Fix[GValueF]] || fx.isInstanceOf[Fix[GArrayF]]) {
+          if (fx.project.isInstanceOf[GValueF[_]] || fx.project.isInstanceOf[GArrayF[_]]) {
             value.get(0)
           } else {
             value

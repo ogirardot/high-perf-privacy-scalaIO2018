@@ -94,7 +94,7 @@ class PrivacyIntegrationTest extends FlatSpec with Matchers with BeforeAndAfterA
 
     it should s"handle complex nested structs with engine: $engine" in {
       val data =
-        """{"kind": "user#part", "civility": {"gender": 1, "givenName": "FABIEN", "familyName": "MARTIN"}, "userId": "0211123586445", "lastUpdatedBy": "FICHECLIENT"}"""
+        """{"civility": {"familyName": "MARTIN", "gender": 1, "givenName": "FABIEN"}, "kind": "user#part", "lastUpdatedBy": "FICHECLIENT", "userId": "0211123586445"}"""
 
       val input = spark.read.json(spark.createDataset[String](List(data))(Encoders.STRING))
 
