@@ -10,7 +10,7 @@ case class ColumnMetadata(nullable: Boolean, tags: List[SemanticTag])
 object ColumnMetadata {
   type SemanticTag = (String, String)
 
-  def empty = ColumnMetadata(true, Nil)
+  def empty = ColumnMetadata(nullable = true, Nil)
 
 }
 /**

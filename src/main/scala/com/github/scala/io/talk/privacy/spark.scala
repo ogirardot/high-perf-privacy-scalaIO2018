@@ -55,27 +55,29 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
       }.getOrElse(input)
     }
 
-    val alg: Algebra[SchemaF, DataType] = {
+    val alg: Algebra[SchemaF, (Boolean, DataType)] = {
       case struct@StructF(fields, metadata) =>
-        val res = ifPrivacy(struct, metadata)
-        schemaFToDataType.apply(res)
+        val res = StructType(fields.map { case (name, (isNullable, field)) =>
+            StructField(name, field, isNullable)
+        })
+        (metadata.nullable, res)
 
       case v@ArrayF(element, metadata) =>
-        val res = ifPrivacy(v, metadata)
-        schemaFToDataType.apply(res)
+        val res = ArrayType(element._2, element._1)
+        (metadata.nullable, res)
 
-      case v: ValueF[DataType] =>
+      case v: ValueF[(Boolean, DataType)] =>
         val res = ifPrivacy(v, v.metadata)
-        schemaFToDataType.apply(res)
+        (v.metadata.nullable, schemaFToDataType.apply(schemaFScalazFunctor.map(res)(_._2)))
     }
-    Fix.birecursiveT.cataT(schema)(alg)
+    val res = Fix.birecursiveT.cataT(schema)(alg)
+    res._2
   }
 
-  // TODO codegen
   override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
     import SchemaF._
 
-    val input = "inputadapter_row"
+    val input = "inputadapter_row_0"
 
     val privacyAlg: Algebra[SchemaF, FieldWithInfos] = {
       case StructF(fieldsWithDataTypes, metadata) =>

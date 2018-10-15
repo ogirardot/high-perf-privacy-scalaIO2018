@@ -15,7 +15,7 @@ package object privacy {
     type PrivacyStrategies = Map[Seq[(String, String)], PrivacyStrategy]
   }
 
-  sealed trait PrivacyStrategy {
+  trait PrivacyStrategy extends Serializable {
 
     val allowedInputTypes: Set[String]
 

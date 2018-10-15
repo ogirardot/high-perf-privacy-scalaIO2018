@@ -1,13 +1,14 @@
 package com.github.scala.io.talk
 
-import matryoshka.{Birecursive, CoalgebraM}
-import matryoshka.data.Fix
-import scalaz._
-import Scalaz._
 import com.github.scala.io.api.DataWithSchema
+import matryoshka.{CoalgebraM, Recursive}
+import matryoshka.data.Fix
+import matryoshka.implicits._
 import matryoshka.patterns.EnvT
-
-import scala.collection.immutable.ListMap
+import org.apache.spark.sql.Row
+import org.apache.spark.sql.types.{ArrayType, DataType, StructType}
+import scalaz.Scalaz._
+import scalaz._
 
 sealed trait DataF[A]
 
@@ -58,14 +59,14 @@ trait DataFInstances {
         val (keys, values) = fields.unzip
         Functor[G].map(values.toList traverse f)(v => GStructF(List((keys zip v).toSeq: _*)))
 
-      case GStringF(value)    => Applicative[G].point(GStringF[B](value))
-      case GLongF(value)      => Applicative[G].point(GLongF[B](value))
-      case GIntF(value)       => Applicative[G].point(GIntF[B](value))
-      case GDoubleF(value)    => Applicative[G].point(GDoubleF[B](value))
-      case GFloatF(value)     => Applicative[G].point(GFloatF[B](value))
-      case GDateF(value)      => Applicative[G].point(GDateF[B](value))
+      case GStringF(value) => Applicative[G].point(GStringF[B](value))
+      case GLongF(value) => Applicative[G].point(GLongF[B](value))
+      case GIntF(value) => Applicative[G].point(GIntF[B](value))
+      case GDoubleF(value) => Applicative[G].point(GDoubleF[B](value))
+      case GFloatF(value) => Applicative[G].point(GFloatF[B](value))
+      case GDateF(value) => Applicative[G].point(GDateF[B](value))
       case GTimestampF(value) => Applicative[G].point(GTimestampF[B](value))
-      case GBooleanF(value)   => Applicative[G].point(GBooleanF[B](value))
+      case GBooleanF(value) => Applicative[G].point(GBooleanF[B](value))
     }
   }
 }
@@ -81,26 +82,27 @@ trait DataFunctions {
     */
   def zipWithSchema: CoalgebraM[\/[Incompatibility, ?], DataWithSchema, (Fix[SchemaF], Fix[DataF])] = {
 
-    case (structf @ Fix(StructF(fields, metadata)), Fix(GStructF(values))) =>
+    case (structf@Fix(StructF(fields, metadata)), Fix(GStructF(values))) =>
       val fieldMap = fields
       val zipped = values.map { case (name, value) => (name, (fieldMap.toMap.apply(name), value)) }
       EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, DataF.struct(zipped))).right[Incompatibility]
 
-    case (structf @ Fix(StructF(_, _)), Fix(GNullF())) =>
+    case (structf@Fix(StructF(_, _)), Fix(GNullF())) =>
       EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, GNullF())).right[Incompatibility]
 
-    case (arrayF @ Fix(ArrayF(n, m)), Fix(GArrayF(elements))) =>
+    case (arrayF@Fix(ArrayF(n, m)), Fix(GArrayF(elements))) =>
       val fieldSchema: Fix[SchemaF] = arrayF // schemaFor(arrayF) FIXME
-      // no patch infos allowed on an array
-      val arrayColumnSchema = arrayF//.copy(metadata = m.copy(patchInfo = None)) FIXME
+    // no patch infos allowed on an array
+    val arrayColumnSchema = arrayF
+      //.copy(metadata = m.copy(patchInfo = None)) FIXME
       val arrayFa = DataF.array(elements.toList map { e =>
         fieldSchema -> e
       })
       EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((arrayColumnSchema, arrayFa)).right[Incompatibility]
 
-    case (arrayF @ Fix(ArrayF(_, m)), Fix(GNullF())) =>
+    case (arrayF@Fix(ArrayF(_, m)), Fix(GNullF())) =>
       // no patch infos allowed on an array
-      val arrayColumnSchema = arrayF//.copy(metadata = m.copy(patchInfo = None)) FIXME
+      val arrayColumnSchema = arrayF //.copy(metadata = m.copy(patchInfo = None)) FIXME
       EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((arrayColumnSchema, GNullF())).right[Incompatibility]
 
     case (valueF, Fix(lower)) =>
@@ -116,5 +118,89 @@ object DataF extends DataFInstances with DataFunctions {
   def struct[A](fields: List[(String, A)]): DataF[A] = GStructF(fields)
 
   def array[A](elements: List[A]): DataF[A] = GArrayF(elements)
+}
 
+object SparkDataConverter {
+  /**
+    * Convert from our GenericData container to a Spark SQL compatible Row
+    * first and last step before creating a dataframe
+    *
+    * @param row data
+    * @return spark's Row
+    */
+  def fromGenericData[T](row: T)(implicit T: Recursive.Aux[T, DataF]): Row = {
+    import matryoshka._
+
+    import scala.language.higherKinds
+
+    val gAlgebra: GAlgebra[(T, ?), DataF, Row] = {
+      case GArrayF(elems) =>
+        val values = elems.map {
+          case (previous, current) =>
+            if (previous.isInstanceOf[Fix[GValueF]])
+              current.get(0)
+            else
+              current
+        }
+        Row(values)
+
+      case GStructF(fields) =>
+        val values = fields.map { field =>
+          val (fx, value) = field._2
+          if (fx.isInstanceOf[Fix[GValueF]] || fx.isInstanceOf[Fix[GArrayF]]) {
+            value.get(0)
+          } else {
+            value
+          }
+        }
+        Row(values: _*)
+
+      case el: GValueF[_] =>
+        Row(el.value)
+    }
+
+    val res = row.para[Row](gAlgebra)
+    println(res)
+    res
+  }
+
+  def toGenericData(row: Row, schema: StructType): Fix[DataF] = {
+    def handleElement(element: Any, schema: DataType): Fix[DataF] = {
+      element match {
+        case arr: Seq[Any] =>
+          val arrayType = schema.asInstanceOf[ArrayType]
+          Fix(GArrayF(arr.map(el => handleElement(el, arrayType.elementType))))
+
+        case struct: Row =>
+          val structType = schema.asInstanceOf[StructType]
+          val dataset = struct.toSeq.zipWithIndex.map {
+            case (el, idx) =>
+              val field = structType(idx)
+              val elementType = field.dataType
+              (field.name, handleElement(el, elementType))
+          }
+          Fix(GStructF(dataset.toList))
+        case value: java.sql.Timestamp =>
+          Fix(GTimestampF(value))
+        case value: java.sql.Date =>
+          Fix(GDateF(value))
+        case value: Boolean =>
+          Fix(GBooleanF(value))
+        case value: Int =>
+          Fix(GIntF(value))
+        case value: Float =>
+          Fix(GFloatF(value))
+        case value: Double =>
+          Fix(GDoubleF(value))
+        case value: Long =>
+          Fix(GLongF(value))
+        case value: String =>
+          Fix(GStringF(value))
+        case null =>
+          Fix(GNullF())
+      }
+    }
+
+    handleElement(row, schema)
+  }
 }
