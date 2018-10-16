@@ -160,9 +160,7 @@ object SparkDataConverter {
         Row(el.value)
     }
 
-    val res = row.para[Row](gAlgebra)
-    println(res)
-    res
+    row.para[Row](gAlgebra)
   }
 
   def toGenericData(row: Row, schema: StructType): Fix[DataF] = {

@@ -21,37 +21,20 @@ object matryoshkaEngine {
     val privacyAlg: AlgebraM[\/[Incompatibility, ?], DataWithSchema, Fix[DataF]] = {
 
       case EnvT((Fix(StructF(fieldsType, meta)), gdata @ GStructF(fields))) =>
-        val tags = meta.tags
-
-        privacyStrategies.foldLeft(Fix(gdata)) {
-          case (item, (keys, cypher)) =>
-            if (keys.map(tags.contains).reduce(_ && _)) {
-              logger.debug(
-                s"matched item : $item for target $keys - found tags $tags")
-              Fix(GStructF(fields.map { case (name, d) => name -> cypher.get(d)(logger.error) }))
-            } else item
-        }.right
+        Fix(gdata).right
 
       case EnvT((Fix(ArrayF(elementType, meta)), gdata @ GArrayF(elems))) =>
-        val tags = meta.tags
+        Fix(gdata).right
 
-        privacyStrategies.foldLeft(Fix(gdata)) {
-          case (item, (keys, cypher)) =>
-            if (keys.map(tags.contains).reduce(_ && _)) {
-              logger.debug(
-                s"matched item : $item for target $keys - found tags $tags")
-              Fix(GArrayF(elems.map(cypher.get(_)(logger.error))))
-            } else item
-        }.right
       case  EnvT((vSchema, value)) /*is a value*/ =>
         val tags = vSchema.unFix.metadata.tags
 
-        privacyStrategies.foldLeft(data) {
+        privacyStrategies.foldLeft(Fix(value)) {
           case (item, (keys, cypher)) =>
             if (keys.map(tags.contains).reduce(_ && _)) {
               logger.debug(
                 s"matched item : $item for target $keys - found tags $tags")
-              cypher.get(Fix(value))(logger.error)
+              cypher.get(item)(logger.error)
             } else item
         }.right
     }
