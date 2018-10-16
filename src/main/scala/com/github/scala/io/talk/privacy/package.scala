@@ -26,7 +26,7 @@ package object privacy {
     def get(value: Fix[DataF])(onError: String => Unit): Fix[DataF] = apply(value).fold (
       errors => {
         if (value != Fix[DataF](GNullF())) {
-          errors.foreach(err =>  println(s"Error while applying privacy on $value : $err"))
+          errors.foreach(err =>  onError(s"Error while applying privacy on $value : $err"))
         }
         Fix[DataF](GNullF())
       }

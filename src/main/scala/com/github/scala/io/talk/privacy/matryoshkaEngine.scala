@@ -20,10 +20,10 @@ object matryoshkaEngine {
     import Scalaz._
     val privacyAlg: AlgebraM[\/[Incompatibility, ?], DataWithSchema, Fix[DataF]] = {
 
-      case EnvT((Fix(StructF(fieldsType, meta)), GStructF(fields))) =>
+      case EnvT((Fix(StructF(fieldsType, meta)), gdata @ GStructF(fields))) =>
         val tags = meta.tags
 
-        privacyStrategies.foldLeft(data) {
+        privacyStrategies.foldLeft(Fix(gdata)) {
           case (item, (keys, cypher)) =>
             if (keys.map(tags.contains).reduce(_ && _)) {
               logger.debug(
@@ -32,10 +32,10 @@ object matryoshkaEngine {
             } else item
         }.right
 
-      case EnvT((Fix(ArrayF(elementType, meta)), GArrayF(elems))) =>
+      case EnvT((Fix(ArrayF(elementType, meta)), gdata @ GArrayF(elems))) =>
         val tags = meta.tags
 
-        privacyStrategies.foldLeft(data) {
+        privacyStrategies.foldLeft(Fix(gdata)) {
           case (item, (keys, cypher)) =>
             if (keys.map(tags.contains).reduce(_ && _)) {
               logger.debug(
