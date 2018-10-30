@@ -4,7 +4,6 @@ import com.github.scala.io.talk.ColumnMetadata.SemanticTag
 import matryoshka.{Algebra, Birecursive, Coalgebra}
 import scalaz.Functor
 
-
 case class ColumnMetadata(nullable: Boolean, tags: List[SemanticTag])
 
 object ColumnMetadata {
@@ -13,6 +12,7 @@ object ColumnMetadata {
   def empty = ColumnMetadata(nullable = true, Nil)
 
 }
+
 /**
   * Without further ado, let's define our main pattern-functor for the remaining of the session.
   */
@@ -21,19 +21,21 @@ sealed trait SchemaF[A] {
 }
 
 // we'll use a ListMap to keep the ordering of the fields
-final case class StructF[A](fields: List[(String, A)], metadata: ColumnMetadata) extends SchemaF[A]
-final case class ArrayF[A](element: A, metadata: ColumnMetadata)                  extends SchemaF[A]
+final case class StructF[A](fields: List[(String, A)], metadata: ColumnMetadata)
+    extends SchemaF[A]
+final case class ArrayF[A](element: A, metadata: ColumnMetadata)
+    extends SchemaF[A]
 
 sealed trait ValueF[A] extends SchemaF[A] {
   val metadata: ColumnMetadata
 }
-final case class BooleanF[A](metadata: ColumnMetadata)                          extends ValueF[A]
-final case class DateF[A](metadata: ColumnMetadata)                             extends ValueF[A]
-final case class DoubleF[A](metadata: ColumnMetadata)                           extends ValueF[A]
-final case class FloatF[A](metadata: ColumnMetadata)                            extends ValueF[A]
-final case class IntegerF[A](metadata: ColumnMetadata)                          extends ValueF[A]
-final case class LongF[A](metadata: ColumnMetadata)                             extends ValueF[A]
-final case class StringF[A](metadata: ColumnMetadata)                           extends ValueF[A]
+final case class BooleanF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class DateF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class DoubleF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class FloatF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class IntegerF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class LongF[A](metadata: ColumnMetadata) extends ValueF[A]
+final case class StringF[A](metadata: ColumnMetadata) extends ValueF[A]
 
 object SchemaF extends SchemaFToDataTypeAlgebras {
 
@@ -42,18 +44,20 @@ object SchemaF extends SchemaFToDataTypeAlgebras {
     */
   implicit val schemaFScalazFunctor: Functor[SchemaF] = new Functor[SchemaF] {
     def map[A, B](fa: SchemaF[A])(f: A => B): SchemaF[B] = fa match {
-      case StructF(fields, m) => StructF(List(
-        fields
-          .map{ case (name, value) => name -> f(value) }:_*
-      ), m)
-      case ArrayF(elem, m)  => ArrayF(f(elem), m)
-      case BooleanF(m)      => BooleanF(m)
-      case DateF(m)         => DateF(m)
-      case DoubleF(m)       => DoubleF(m)
-      case FloatF(m)        => FloatF(m)
-      case IntegerF(m)      => IntegerF(m)
-      case LongF(m)         => LongF(m)
-      case StringF(m)       => StringF(m)
+      case StructF(fields, m) =>
+        StructF(List(
+                  fields
+                    .map { case (name, value) => name -> f(value) }: _*
+                ),
+                m)
+      case ArrayF(elem, m) => ArrayF(f(elem), m)
+      case BooleanF(m)     => BooleanF(m)
+      case DateF(m)        => DateF(m)
+      case DoubleF(m)      => DoubleF(m)
+      case FloatF(m)       => FloatF(m)
+      case IntegerF(m)     => IntegerF(m)
+      case LongF(m)        => LongF(m)
+      case StringF(m)      => StringF(m)
     }
   }
 }
@@ -79,15 +83,17 @@ trait SchemaFToDataTypeAlgebras {
     * As usual, simply a function from SchemaF[DataType] to DataType
     */
   def schemaFToDataType: Algebra[SchemaF, DataType] = {
-    case StructF(fields, _) => StructType(fields.map { case (name, value) => StructField(name, value) }.toArray)
-    case ArrayF(elem, m)    => ArrayType(elem, containsNull = false)
-    case BooleanF(_)      => BooleanType
-    case DateF(_)         => DateType
-    case DoubleF(_)       => DoubleType
-    case FloatF(_)        => FloatType
-    case IntegerF(_)      => IntegerType
-    case LongF(_)         => LongType
-    case StringF(_)       => StringType
+    case StructF(fields, _) =>
+      StructType(
+        fields.map { case (name, value) => StructField(name, value) }.toArray)
+    case ArrayF(elem, m) => ArrayType(elem, containsNull = false)
+    case BooleanF(_)     => BooleanType
+    case DateF(_)        => DateType
+    case DoubleF(_)      => DoubleType
+    case FloatF(_)       => FloatType
+    case IntegerF(_)     => IntegerType
+    case LongF(_)        => LongType
+    case StringF(_)      => StringType
 
   }
 
@@ -95,7 +101,9 @@ trait SchemaFToDataTypeAlgebras {
     * And the other way around, a function from DataType to SchemaF[DataType]
     */
   def dataTypeToSchemaF: Coalgebra[SchemaF, DataType] = {
-    case StructType(fields) => StructF(List(fields.map(f => f.name -> f.dataType): _*), ColumnMetadata.empty)
+    case StructType(fields) =>
+      StructF(List(fields.map(f => f.name -> f.dataType): _*),
+              ColumnMetadata.empty)
     case ArrayType(elem, _) => ArrayF(elem, ColumnMetadata.empty)
     case BooleanType        => BooleanF(ColumnMetadata.empty)
     case DateType           => DateF(ColumnMetadata.empty)

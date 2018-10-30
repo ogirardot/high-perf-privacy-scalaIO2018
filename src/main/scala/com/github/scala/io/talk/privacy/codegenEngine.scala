@@ -7,7 +7,10 @@ import matryoshka.data.Fix
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
+import org.apache.spark.sql.catalyst.expressions.codegen.{
+  CodegenContext,
+  ExprCode
+}
 import org.apache.spark.sql.types.{ArrayType, DataType, StructField, StructType}
 import org.apache.spark.sql.utils.SmartRow
 import org.apache.spark.unsafe.types.UTF8String
@@ -16,19 +19,19 @@ case class InputVariable(name: String) extends AnyVal
 
 sealed trait CatalystOp
 
-case class CatalystCode(code: InputVariable => String, outputVariable: String) extends CatalystOp
+case class CatalystCode(code: InputVariable => String, outputVariable: String)
+    extends CatalystOp
 
 case object NoOp extends CatalystOp
-
 
 case class ApplyMe(lambda: Any => Any) {
   def apply(value: Any): Any = lambda(value)
 }
 
-// TODO Spark expression
 case class ApplyPrivacyExpression(schema: Fix[SchemaF],
                                   privacyStrategies: PrivacyStrategies,
-                                  children: Seq[Expression]) extends Expression {
+                                  children: Seq[Expression])
+    extends Expression {
 
   type FieldName = String
   type FieldWithInfos = (DataType, CatalystOp)
@@ -37,14 +40,17 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
 
   override def eval(input: InternalRow): Any = {
     // privacy "manually" #DelegateToMatryoshka
-    val structType = Fix.birecursiveT.cataT(schema)(SchemaF.schemaFToDataType).asInstanceOf[StructType]
-    val gdata = SparkDataConverter.toGenericData(Row(input.toSeq(structType):_*), structType)
+    val structType = Fix.birecursiveT
+      .cataT(schema)(SchemaF.schemaFToDataType)
+      .asInstanceOf[StructType]
+    val gdata = SparkDataConverter.toGenericData(
+      Row(input.toSeq(structType): _*),
+      structType)
     val res = matryoshkaEngine.transform(schema, gdata, privacyStrategies)
     SmartRow.fromSeq(SparkDataConverter.fromGenericData(res).toSeq.map {
       case s: String => UTF8String.fromString(s)
-      case a => a
-    }
-    )
+      case a         => a
+    })
   }
 
   /**
@@ -57,35 +63,44 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     import SchemaF._
     import matryoshka.data._
     // check if any privacy strategy needs to be applied an mutate the schema accordingly
-    def ifPrivacy[A](input: SchemaF[A], metadata: ColumnMetadata): SchemaF[A] = {
-      privacyStrategies.find { case (tags, _) =>
-        // we do not check here if the strat is "applicable" only if the tags match
-        tags.size == metadata.tags.size && tags.toSet == metadata.tags.toSet
-      }.map { case (_, strategy) =>
-        strategy.schema(input)
-      }.getOrElse(input)
+    def ifPrivacy[A](input: SchemaF[A],
+                     metadata: ColumnMetadata): SchemaF[A] = {
+      privacyStrategies
+        .find {
+          case (tags, _) =>
+            // we do not check here if the strat is "applicable" only if the tags match
+            tags.size == metadata.tags.size && tags.toSet == metadata.tags.toSet
+        }
+        .map {
+          case (_, strategy) =>
+            strategy.schema(input)
+        }
+        .getOrElse(input)
     }
 
     val alg: Algebra[SchemaF, (Boolean, DataType)] = {
-      case struct@StructF(fields, metadata) =>
-        val res = StructType(fields.map { case (name, (isNullable, field)) =>
+      case struct @ StructF(fields, metadata) =>
+        val res = StructType(fields.map {
+          case (name, (isNullable, field)) =>
             StructField(name, field, isNullable)
         })
         (metadata.nullable, res)
 
-      case v@ArrayF(element, metadata) =>
+      case v @ ArrayF(element, metadata) =>
         val res = ArrayType(element._2, element._1)
         (metadata.nullable, res)
 
       case v: ValueF[(Boolean, DataType)] =>
         val res = ifPrivacy(v, v.metadata)
-        (v.metadata.nullable, schemaFToDataType.apply(schemaFScalazFunctor.map(res)(_._2)))
+        (v.metadata.nullable,
+         schemaFToDataType.apply(schemaFScalazFunctor.map(res)(_._2)))
     }
     val res = Fix.birecursiveT.cataT(schema)(alg)
     res._2
   }
 
-  override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+  override protected def doGenCode(ctx: CodegenContext,
+                                   ev: ExprCode): ExprCode = {
     import SchemaF._
 
     val input = "inputadapter_row_0"
@@ -98,7 +113,8 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
         val CatalystCode(fieldsCode, _) =
           generateCodeForStruct(ctx, fieldsWithDataTypes, tmp)
         val outputDataType = fieldsToSparkDataType(fieldsWithDataTypes)
-        val outputDataTypeForCodegen = ctx.addReferenceObj("outputDataType", outputDataType)
+        val outputDataTypeForCodegen =
+          ctx.addReferenceObj("outputDataType", outputDataType)
         val code = (inputVariable: InputVariable) => {
           s"""
              org.apache.spark.sql.catalyst.InternalRow  $inputTmp = (org.apache.spark.sql.catalyst.InternalRow ) ${inputVariable.name};
@@ -126,11 +142,9 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
               Object[] $tempVariable = new Object[${inputVariable.name}.numElements()];
               for (int $pos = 0; $pos < ${inputVariable.name}.numElements(); $pos++) {
                 if (!${inputVariable.name}.isNullAt($pos)) {
-                  ${
-              innerCode.apply(
-                InputVariable(s"(${inputVariable.name}.get($pos, $tpeName))")
-              )
-            }
+                  ${innerCode.apply(
+              InputVariable(s"(${inputVariable.name}.get($pos, $tpeName))")
+            )}
                   $tempVariable[$pos] = $innerOuput;
                 } else {
                   $tempVariable[$pos] = null;
@@ -142,35 +156,35 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
         }
         (arrayDataType, resOp)
 
-
-      case valueColumnSchema: ValueF[FieldWithInfos] if valueColumnSchema.metadata.tags.nonEmpty =>
+      case valueColumnSchema: ValueF[FieldWithInfos]
+          if valueColumnSchema.metadata.tags.nonEmpty =>
         val tags: List[(String, String)] = valueColumnSchema.metadata.tags
-        val elementDataType: DataType = schemaFToDataType.apply(schemaFScalazFunctor(valueColumnSchema)(_._1))
-        val resOp = privacyStrategies.foldLeft(NoOp: CatalystOp) {
-          case (item, (keys, cypher)) =>
-            if (keys.map(tags.contains).reduce(_ && _)) {
-              val output = ctx.freshName("output")
-              val outputSchema = cypher.schema(valueColumnSchema)
-              val outputDataType = schemaFToDataType.apply(schemaFScalazFunctor(outputSchema)(_._1))
-              val javaType = ctx.boxedType(outputDataType)
-              val cypherInSpark =
-                ctx.addReferenceObj("cypherMe", transTypePrivacyStrategy(cypher))
-              val code = (inputVariable: InputVariable) =>
-                s"""
+        val elementDataType: DataType =
+          schemaFToDataType.apply(schemaFScalazFunctor(valueColumnSchema)(_._1))
+        val resOp = privacyStrategies
+          .get(tags)
+          .map { strat =>
+            val output = ctx.freshName("output")
+            val outputSchema = strat.schema(valueColumnSchema)
+            val outputDataType =
+              schemaFToDataType.apply(schemaFScalazFunctor(outputSchema)(_._1))
+            val javaType = ctx.boxedType(outputDataType)
+            val cypherInSpark =
+              ctx.addReferenceObj("cypherMe", transTypePrivacyStrategy(strat))
+            val code = (inputVariable: InputVariable) => s"""
                       $javaType $output = ($javaType) $cypherInSpark.apply(${inputVariable.name});
                     """
-              CatalystCode(code, output)
+            CatalystCode(code, output)
 
-            } else item
-        }
+          }
+          .getOrElse(NoOp)
         (elementDataType, resOp)
 
-
       case value: ValueF[FieldWithInfos] if value.metadata.tags.isEmpty =>
-        val elementDataType = schemaFToDataType.apply(schemaFScalazFunctor(value)(_._1))
+        val elementDataType =
+          schemaFToDataType.apply(schemaFScalazFunctor(value)(_._1))
         (elementDataType, NoOp)
     }
-
 
     ev.copy(code = Fix.birecursiveT.cataT(schema)(privacyAlg) match {
       case (_, NoOp) =>
@@ -179,7 +193,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
            final InternalRow  ${ev.value} = $input;
           """
 
-      case rec@(topLevelDataType, CatalystCode(method, outputVariable)) =>
+      case rec @ (topLevelDataType, CatalystCode(method, outputVariable)) =>
         s"""
               ${method(InputVariable(input))}
               final boolean ${ev.isNull} = ($input != null) ? false : true;
@@ -196,10 +210,10 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     * @return the code necessary to mutate a struct
     */
   def generateCodeForStruct(
-                             ctx: CodegenContext,
-                             fieldsWithDataType: Seq[(FieldName, FieldWithInfos)],
-                             tmp: String
-                           ): CatalystCode = {
+      ctx: CodegenContext,
+      fieldsWithDataType: Seq[(FieldName, FieldWithInfos)],
+      tmp: String
+  ): CatalystCode = {
     fieldsWithDataType.zipWithIndex.foldLeft(CatalystCode(_ => "", tmp)) {
       case (buffer, ((_, (elementDataType, op)), idx)) =>
         if (op == NoOp) {
@@ -223,7 +237,8 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
               s"""
                  ${buffer.code(inputVariable)}
                  if (!${inputVariable.name}.isNullAt($idx)) {
-                   ${code.apply(InputVariable(s"${inputVariable.name}.$fieldExtractor"))}
+                   ${code.apply(
+                InputVariable(s"${inputVariable.name}.$fieldExtractor"))}
                    $tmp.update($idx, $intermediateOutput);
                  }
               """,
@@ -249,30 +264,32 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
 
   def wrap(input: Any): Fix[DataF] = {
     input match {
-      case null => Fix(GNullF())
-      case a: String => Fix(GStringF(a))
-      case a: Long => Fix(GLongF(a))
-      case a: java.lang.Long => Fix(GLongF(a))
-      case a: UTF8String => Fix(GStringF(a.toString))
-      case a: Double => Fix(GDoubleF(a))
-      case a: java.lang.Double => Fix(GDoubleF(a))
-      case a: Int => Fix(GIntF(a))
-      case a: java.lang.Integer => Fix(GIntF(a))
-      case a: Float => Fix(GFloatF(a))
-      case a: java.lang.Float => Fix(GFloatF(a))
-      case a: java.sql.Date => Fix(GDateF(a))
+      case null                  => Fix(GNullF())
+      case a: String             => Fix(GStringF(a))
+      case a: Long               => Fix(GLongF(a))
+      case a: java.lang.Long     => Fix(GLongF(a))
+      case a: UTF8String         => Fix(GStringF(a.toString))
+      case a: Double             => Fix(GDoubleF(a))
+      case a: java.lang.Double   => Fix(GDoubleF(a))
+      case a: Int                => Fix(GIntF(a))
+      case a: java.lang.Integer  => Fix(GIntF(a))
+      case a: Float              => Fix(GFloatF(a))
+      case a: java.lang.Float    => Fix(GFloatF(a))
+      case a: java.sql.Date      => Fix(GDateF(a))
       case a: java.sql.Timestamp => Fix(GTimestampF(a))
       case _ =>
-        throw new UnsupportedOperationException(s"Input data is not supported : $input of type ${input.getClass}")
+        throw new UnsupportedOperationException(
+          s"Input data is not supported : $input of type ${input.getClass}")
     }
   }
 
   def unwrap[A](input: DataF[A]): Any = input match {
-    case GNullF() => null
+    case GNullF()       => null
     case x: GStringF[A] => UTF8String.fromString(x.value)
-    case x: GValueF[A] => x.value
+    case x: GValueF[A]  => x.value
     case _ =>
-      throw new UnsupportedOperationException(s"Input data is not supported : $input of type ${input.getClass}")
+      throw new UnsupportedOperationException(
+        s"Input data is not supported : $input of type ${input.getClass}")
   }
 
   /**
@@ -281,7 +298,8 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
     * @param fieldsWithDataType all the fields transformed after privacy
     * @return
     */
-  private def fieldsToSparkDataType(fieldsWithDataType: List[(FieldName, FieldWithInfos)]): StructType = {
+  private def fieldsToSparkDataType(
+      fieldsWithDataType: List[(FieldName, FieldWithInfos)]): StructType = {
     StructType(fieldsWithDataType.map {
       case (fieldName, (fieldDataType, _)) =>
         StructField(fieldName, fieldDataType, nullable = true)

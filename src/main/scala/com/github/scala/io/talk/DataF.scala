@@ -50,25 +50,27 @@ trait DataFInstances {
   implicit val genericDataFTraverse: Traverse[DataF] = new Traverse[DataF] {
 
     override def traverseImpl[G[_], A, B](
-                                           fa: DataF[A]
-                                         )(f: A => G[B])(implicit evidence$1: Applicative[G]): G[DataF[B]] = fa match {
-      case GNullF() => Applicative[G].point(GNullF[B]())
-      case GArrayF(elems) =>
-        Functor[G].map(elems.toList traverse f)(GArrayF.apply)
+        fa: DataF[A]
+    )(f: A => G[B])(implicit evidence$1: Applicative[G]): G[DataF[B]] =
+      fa match {
+        case GNullF() => Applicative[G].point(GNullF[B]())
+        case GArrayF(elems) =>
+          Functor[G].map(elems.toList traverse f)(GArrayF.apply)
 
-      case GStructF(fields) =>
-        val (keys, values) = fields.unzip
-        Functor[G].map(values.toList traverse f)(v => GStructF(List((keys zip v).toSeq: _*)))
+        case GStructF(fields) =>
+          val (keys, values) = fields.unzip
+          Functor[G].map(values.toList traverse f)(v =>
+            GStructF(List((keys zip v).toSeq: _*)))
 
-      case GStringF(value) => Applicative[G].point(GStringF[B](value))
-      case GLongF(value) => Applicative[G].point(GLongF[B](value))
-      case GIntF(value) => Applicative[G].point(GIntF[B](value))
-      case GDoubleF(value) => Applicative[G].point(GDoubleF[B](value))
-      case GFloatF(value) => Applicative[G].point(GFloatF[B](value))
-      case GDateF(value) => Applicative[G].point(GDateF[B](value))
-      case GTimestampF(value) => Applicative[G].point(GTimestampF[B](value))
-      case GBooleanF(value) => Applicative[G].point(GBooleanF[B](value))
-    }
+        case GStringF(value)    => Applicative[G].point(GStringF[B](value))
+        case GLongF(value)      => Applicative[G].point(GLongF[B](value))
+        case GIntF(value)       => Applicative[G].point(GIntF[B](value))
+        case GDoubleF(value)    => Applicative[G].point(GDoubleF[B](value))
+        case GFloatF(value)     => Applicative[G].point(GFloatF[B](value))
+        case GDateF(value)      => Applicative[G].point(GDateF[B](value))
+        case GTimestampF(value) => Applicative[G].point(GTimestampF[B](value))
+        case GBooleanF(value)   => Applicative[G].point(GBooleanF[B](value))
+      }
   }
 }
 
@@ -81,34 +83,43 @@ trait DataFunctions {
     *
     *        Given a schema and some data, return either a [[DataWithSchema]] or a [[Incompatibility]].
     */
-  def zipWithSchema: CoalgebraM[\/[Incompatibility, ?], DataWithSchema, (Fix[SchemaF], Fix[DataF])] = {
+  def zipWithSchema: CoalgebraM[\/[Incompatibility, ?],
+                                DataWithSchema,
+                                (Fix[SchemaF], Fix[DataF])] = {
 
-    case (structf@Fix(StructF(fields, metadata)), Fix(GStructF(values))) =>
+    case (structf @ Fix(StructF(fields, metadata)), Fix(GStructF(values))) =>
       val fieldMap = fields
-      val zipped = values.map { case (name, value) => (name, (fieldMap.toMap.apply(name), value)) }
-      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, DataF.struct(zipped))).right[Incompatibility]
+      val zipped = values.map {
+        case (name, value) => (name, (fieldMap.toMap.apply(name), value))
+      }
+      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])](
+        (structf, DataF.struct(zipped))).right[Incompatibility]
 
-    case (structf@Fix(StructF(_, _)), Fix(GNullF())) =>
-      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, GNullF())).right[Incompatibility]
+    case (structf @ Fix(StructF(_, _)), Fix(GNullF())) =>
+      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((structf, GNullF()))
+        .right[Incompatibility]
 
-    case (arrayF@Fix(ArrayF(n, m)), Fix(GArrayF(elements))) =>
+    case (arrayF @ Fix(ArrayF(n, m)), Fix(GArrayF(elements))) =>
       val fieldSchema: Fix[SchemaF] = arrayF // schemaFor(arrayF) FIXME
-    // no patch infos allowed on an array
-    val arrayColumnSchema = arrayF
+      // no patch infos allowed on an array
+      val arrayColumnSchema = arrayF
       //.copy(metadata = m.copy(patchInfo = None)) FIXME
       val arrayFa = DataF.array(elements.toList map { e =>
         fieldSchema -> e
       })
-      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((arrayColumnSchema, arrayFa)).right[Incompatibility]
+      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])](
+        (arrayColumnSchema, arrayFa)).right[Incompatibility]
 
-    case (arrayF@Fix(ArrayF(_, m)), Fix(GNullF())) =>
+    case (arrayF @ Fix(ArrayF(_, m)), Fix(GNullF())) =>
       // no patch infos allowed on an array
       val arrayColumnSchema = arrayF //.copy(metadata = m.copy(patchInfo = None)) FIXME
-      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((arrayColumnSchema, GNullF())).right[Incompatibility]
+      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])](
+        (arrayColumnSchema, GNullF())).right[Incompatibility]
 
     case (valueF, Fix(lower)) =>
       val dataF = lower.map((valueF, _))
-      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((valueF, dataF)).right[Incompatibility]
+      EnvT[Fix[SchemaF], DataF, (Fix[SchemaF], Fix[DataF])]((valueF, dataF))
+        .right[Incompatibility]
 
     case (s, d) => Incompatibility(s, d).left
   }
@@ -122,6 +133,7 @@ object DataF extends DataFInstances with DataFunctions {
 }
 
 object SparkDataConverter {
+
   /**
     * Convert from our GenericData container to a Spark SQL compatible Row
     * first and last step before creating a dataframe
@@ -148,7 +160,8 @@ object SparkDataConverter {
       case GStructF(fields) =>
         val values = fields.map { field =>
           val (fx, value) = field._2
-          if (fx.project.isInstanceOf[GValueF[_]] || fx.project.isInstanceOf[GArrayF[_]]) {
+          if (fx.project.isInstanceOf[GValueF[_]] || fx.project
+                .isInstanceOf[GArrayF[_]]) {
             value.get(0)
           } else {
             value

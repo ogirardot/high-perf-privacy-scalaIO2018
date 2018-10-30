@@ -24,24 +24,32 @@ package object api {
           val structSchema = df.schema
           val mutated = df.rdd.map { row =>
             val gdata = SparkDataConverter.toGenericData(row, structSchema)
-            val result = matryoshkaEngine.transform(schema, gdata, privacyStrategies)
+            val result =
+              matryoshkaEngine.transform(schema, gdata, privacyStrategies)
             SparkDataConverter.fromGenericData(result)
           }
-          val mutatedSchema = matryoshkaEngine.transformSchema(schema, privacyStrategies)
-          val mutatedDataType = Fix.birecursiveT.cataT(mutatedSchema)(SchemaF.schemaFToDataType)
-          df.sparkSession.createDataFrame(mutated, mutatedDataType.asInstanceOf[StructType])
+          val mutatedSchema =
+            matryoshkaEngine.transformSchema(schema, privacyStrategies)
+          val mutatedDataType =
+            Fix.birecursiveT.cataT(mutatedSchema)(SchemaF.schemaFToDataType)
+          df.sparkSession
+            .createDataFrame(mutated, mutatedDataType.asInstanceOf[StructType])
 
         case LambdaEngine =>
-          val mutatedSchema = matryoshkaEngine.transformSchema(schema, privacyStrategies)
-          val mutatedDataType = Fix.birecursiveT.cataT(mutatedSchema)(SchemaF.schemaFToDataType)
-          val preparedLambda = ApplyPrivacyLambda.prepareTransform(schema, privacyStrategies)
+          val mutatedSchema =
+            matryoshkaEngine.transformSchema(schema, privacyStrategies)
+          val mutatedDataType =
+            Fix.birecursiveT.cataT(mutatedSchema)(SchemaF.schemaFToDataType)
+          val preparedLambda =
+            ApplyPrivacyLambda.prepareTransform(schema, privacyStrategies)
           val structSchema = df.schema
           val mutated = df.rdd.map { row =>
             val gdata = SparkDataConverter.toGenericData(row, structSchema)
             val result = preparedLambda.apply(gdata)
             SparkDataConverter.fromGenericData(result)
           }
-          df.sparkSession.createDataFrame(mutated, mutatedDataType.asInstanceOf[StructType])
+          df.sparkSession
+            .createDataFrame(mutated, mutatedDataType.asInstanceOf[StructType])
 
         case CodegenEngine =>
           val expression = ApplyPrivacyExpression(
@@ -51,11 +59,12 @@ package object api {
           )
 
           df.withColumn(
-            "structMeUp",
-            new Column(
-              expression
+              "structMeUp",
+              new Column(
+                expression
+              )
             )
-          ).select("structMeUp.*")
+            .select("structMeUp.*")
       }
     }
   }
