@@ -11,4 +11,6 @@ You have three engines here :
 * lambda engine: creates a lambda to do that "digging work once" and apply the corresponding lambda multiple times;
 * codegen engine: creates an Apache Spark expression to do that work leveraging the Unsafe/Tungsten data format of Apache Spark SQL.
 
+## Where are the slides ? 
+Here you go : https://speakerdeck.com/ogirardot/high-performance-privacy-by-design-using-matryoshka-and-spark
 Enjoy !
