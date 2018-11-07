@@ -97,10 +97,11 @@ class PrivacyIntegrationTest
 
     it should s"handle complex nested structs with engine: $engine" in {
       val data =
-        """{"civility": {"familyName": "MARTIN", "gender": 1, "givenName": "FABIEN"}, "kind": "user#part", "lastUpdatedBy": "FICHECLIENT", "userId": "0211123586445"}"""
+        """{"civility": {"familyName": "MARTIN", "gender": 1, "givenName": "FABIEN", "inner": {"civility": {"familyName": "MARTIN", "gender": 1, "givenName": "FABIEN"}, "gender": 2}}, "kind": "user#part", "lastUpdatedBy": "FICHECLIENT", "userId": "0211123586445"}"""
 
       val input = spark.read.json(
         spark.createDataset[String](List(data))(Encoders.STRING))
+      input.printSchema()
 
       val cypher = new PrivacyStrategy {
         override val allowedInputTypes: Set[String] = Set()
@@ -156,7 +157,52 @@ class PrivacyIntegrationTest
                       ColumnMetadata.empty.copy(tags =
                         List(("rdfs:type", "http://schema.org/Person#pseudo")))
                     ))
-                  )
+                  ),
+                  ("inner",
+                   Fix(StructF(
+                     List(
+                       (
+                         "civility",
+                         Fix(StructF(
+                           List(
+                             (
+                               "familyName",
+                               Fix(StringF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#mask")))
+                               ))
+                             ),
+                             (
+                               "gender",
+                               Fix(LongF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#interv")))
+                               ))
+                             ),
+                             (
+                               "givenName",
+                               Fix(StringF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#pseudo")))
+                               ))
+                             )
+                           ),
+                           ColumnMetadata.empty
+                         ))
+                       ),
+                       (
+                         "gender",
+                         Fix(StringF(
+                           ColumnMetadata.empty.copy(tags = List(
+                             ("rdfs:type", "http://schema.org/Person#interv")))
+                         ))
+                       )
+                     ),
+                     ColumnMetadata.empty
+                   )))
                 ),
                 ColumnMetadata.empty
               ))
@@ -202,7 +248,52 @@ class PrivacyIntegrationTest
                       ColumnMetadata.empty.copy(tags =
                         List(("rdfs:type", "http://schema.org/Person#pseudo")))
                     ))
-                  )
+                  ),
+                  ("inner",
+                   Fix(StructF(
+                     List(
+                       (
+                         "civility",
+                         Fix(StructF(
+                           List(
+                             (
+                               "familyName",
+                               Fix(StringF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#mask")))
+                               ))
+                             ),
+                             (
+                               "gender",
+                               Fix(StringF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#interv")))
+                               ))
+                             ),
+                             (
+                               "givenName",
+                               Fix(StringF(
+                                 ColumnMetadata.empty.copy(tags =
+                                   List(("rdfs:type",
+                                         "http://schema.org/Person#pseudo")))
+                               ))
+                             )
+                           ),
+                           ColumnMetadata.empty
+                         ))
+                       ),
+                       (
+                         "gender",
+                         Fix(StringF(
+                           ColumnMetadata.empty.copy(tags = List(
+                             ("rdfs:type", "http://schema.org/Person#interv")))
+                         ))
+                       )
+                     ),
+                     ColumnMetadata.empty
+                   )))
                 ),
                 ColumnMetadata.empty
               ))
@@ -227,13 +318,23 @@ class PrivacyIntegrationTest
         SchemaF.schemaFToDataType)
       output.schema should be(schemaAsDT.asInstanceOf[StructType])
 
-      output.first() should be(
-        Row(Row("MARTIN",
-                "NWoZK3kTsExUV00Ywo1G5jlUKKs=",
-                "ZHmSvjodAvqIT7x0Lu6YDXA8D9g="),
-            "HgoSOFkFjIGGbMqW1Uz6LPIwG/M=",
-            "FICHECLIENT",
-            "0211123586445"))
+      val row = output.first()
+      println(output.toJSON.first())
+      row should be(
+        Row(
+          Row(
+            "MARTIN",
+            "NWoZK3kTsExUV00Ywo1G5jlUKKs=",
+            "ZHmSvjodAvqIT7x0Lu6YDXA8D9g=",
+            Row(Row("MARTIN",
+                    "NWoZK3kTsExUV00Ywo1G5jlUKKs=",
+                    "ZHmSvjodAvqIT7x0Lu6YDXA8D9g="),
+                "FIn5I8TcpykXiz4yM0WFUNjd3yk=")
+          ),
+          "HgoSOFkFjIGGbMqW1Uz6LPIwG/M=",
+          "FICHECLIENT",
+          "0211123586445"
+        ))
     }
   }
 
