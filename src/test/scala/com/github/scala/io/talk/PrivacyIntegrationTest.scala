@@ -4,17 +4,15 @@ import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.util.Base64
 
-import com.github.scala.io.talk.privacy._
-import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql.{Encoders, Row, SparkSession}
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import com.github.scala.io.api._
+import com.github.scala.io.talk.privacy._
 import javax.crypto.Cipher
 import javax.crypto.spec.{IvParameterSpec, SecretKeySpec}
 import matryoshka.data.Fix
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.StructType
-
-import scala.collection.mutable
+import org.apache.spark.sql.{Encoders, Row, SparkSession}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 
 class PrivacyIntegrationTest
     extends FlatSpec
@@ -101,7 +99,6 @@ class PrivacyIntegrationTest
 
       val input = spark.read.json(
         spark.createDataset[String](List(data))(Encoders.STRING))
-      input.printSchema()
 
       val cypher = new PrivacyStrategy {
         override val allowedInputTypes: Set[String] = Set()
@@ -319,7 +316,6 @@ class PrivacyIntegrationTest
       output.schema should be(schemaAsDT.asInstanceOf[StructType])
 
       val row = output.first()
-      println(output.toJSON.first())
       row should be(
         Row(
           Row(
@@ -329,7 +325,7 @@ class PrivacyIntegrationTest
             Row(Row("MARTIN",
                     "NWoZK3kTsExUV00Ywo1G5jlUKKs=",
                     "ZHmSvjodAvqIT7x0Lu6YDXA8D9g="),
-                "FIn5I8TcpykXiz4yM0WFUNjd3yk=")
+                "2kuSN7rMzfGcB2DKt67EqDWQELA=")
           ),
           "HgoSOFkFjIGGbMqW1Uz6LPIwG/M=",
           "FICHECLIENT",
