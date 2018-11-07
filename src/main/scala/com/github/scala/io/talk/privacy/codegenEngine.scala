@@ -215,7 +215,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
       tmp: String
   ): CatalystCode = {
     fieldsWithDataType.zipWithIndex.foldLeft(CatalystCode(_ => "", tmp)) {
-      case (buffer, ((_, (elementDataType, op)), idx)) =>
+      case (buffer, ((fieldName, (elementDataType, op)), idx)) =>
         if (op == NoOp) {
           buffer
         } else {
@@ -237,6 +237,7 @@ case class ApplyPrivacyExpression(schema: Fix[SchemaF],
               s"""
                  ${buffer.code(inputVariable)}
                  if (!${inputVariable.name}.isNullAt($idx)) {
+                 // $fieldName
                    ${code.apply(
                 InputVariable(s"${inputVariable.name}.$fieldExtractor"))}
                    $tmp.update($idx, $intermediateOutput);

@@ -192,7 +192,7 @@ class PrivacyIntegrationTest
                        ),
                        (
                          "gender",
-                         Fix(StringF(
+                         Fix(LongF(
                            ColumnMetadata.empty.copy(tags = List(
                              ("rdfs:type", "http://schema.org/Person#interv")))
                          ))
