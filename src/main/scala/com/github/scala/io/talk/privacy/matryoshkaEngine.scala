@@ -54,46 +54,19 @@ object matryoshkaEngine {
   // TODO same as com.github.scala.io.talk.ApplyPrivacyExpression.dataType without spark
   def transformSchema(schema: Fix[SchemaF],
                       privacyStrategies: PrivacyStrategies): Fix[SchemaF] = {
-    def alg: Algebra[SchemaF, Fix[SchemaF]] = {
-      case s @ StructF(_, metadata) =>
-        val newSchema = privacyStrategies
-          .find {
-            case (tags, _) =>
-              tags.size == metadata.tags.size && tags.toSet == metadata.tags.toSet
-          }
-          .map {
-            case (_, strategy) =>
-              strategy.schema(s)
-          }
-          .getOrElse(s)
-        Fix(newSchema)
-      case s @ ArrayF(_, metadata) =>
-        val newSchema = privacyStrategies
-          .find {
-            case (tags, _) =>
-              tags.size == metadata.tags.size && tags.toSet == metadata.tags.toSet
-          }
-          .map {
-            case (_, strategy) =>
-              strategy.schema(s)
-          }
-          .getOrElse(s)
-        Fix(newSchema)
-
-      case s =>
-        val newSchema = privacyStrategies
-          .find {
-            case (tags, _) =>
-              tags.size == s.metadata.tags.size && tags.toSet == s.metadata.tags.toSet
-          }
-          .map {
-            case (_, strategy) =>
-              strategy.schema(s)
-          }
-          .getOrElse(s)
-        Fix(newSchema)
-    }
+    def alg: Algebra[SchemaF, Fix[SchemaF]] = s => changeSchema(privacyStrategies, Fix(s))
 
     schema.cata(alg)
   }
+
+  def changeSchema(privacyStrategies: PrivacyStrategies,
+                   schemaF: Fix[SchemaF]): Fix[SchemaF] = {
+    val s = schemaF.unFix
+    privacyStrategies
+      .find {
+        case (tags, _) => tags.toSet == s.metadata.tags.toSet
+      }
+      .fold(schemaF) { case (_, strategy) => Fix(strategy.schema(s)) }
+  }
+
 }
