@@ -64,7 +64,7 @@ object matryoshkaEngine {
     val s = schemaF.unFix
     privacyStrategies
       .find {
-        case (tags, _) => tags.toSet == s.metadata.tags.toSet
+        case (tags, _) => tags.size == s.metadata.tags.size && tags.toSet == s.metadata.tags.toSet
       }
       .fold(schemaF) { case (_, strategy) => Fix(strategy.schema(s)) }
   }
